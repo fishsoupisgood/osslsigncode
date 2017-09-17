@@ -4434,7 +4434,10 @@ static int append_signature(PKCS7 *sig, PKCS7 *cursig, file_type_t type,
 			printf("Internal error: No 'cursig' was extracted\n");
 			return 1; /* FAILED */
 		}
-		if (pkcs7_set_nested_signature(cursig, sig, options->signing_time) == 0) {
+
+		if (type == FILE_TYPE_CAT) {
+			printf("cat files do not support nesting -- leaving existing signature intact\n");
+		} else if (pkcs7_set_nested_signature(cursig, sig, options->signing_time) == 0) {
 			printf("Unable to append the nested signature to the current signature\n");
 			return 1; /* FAILED */
 		}
@@ -5391,11 +5394,6 @@ static PKCS7 *cat_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *he
 	PKCS7 *sig = NULL;
 	const unsigned char *inptr = indata;
 
-	if (options->nest) {
-		/* I've not tried using pkcs7_set_nested_signature as signtool won't do this */
-		printf("cat files do not support nesting\n");
-		return NULL; /* FAILED */
-	}
 
 	if ((cmd != CMD_SIGN) && (cmd != CMD_ADD) && (cmd != CMD_REMOVE))
 		return NULL;
