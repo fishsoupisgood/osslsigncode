@@ -4978,7 +4978,7 @@ ENGINE *pkcs11_engine(GLOBAL_OPTIONS *options)
 /* Load the private key and the signer certificate from a security token */
 static int read_token(GLOBAL_OPTIONS *options, ENGINE *engine, CRYPTO_PARAMS *cparams)
 {
-	if (!ENGINE_ctrl_cmd_string(engine, "MODULE_PATH", options->p11module, 0)) {
+	if (options->p11module && !ENGINE_ctrl_cmd_string(engine, "MODULE_PATH", options->p11module, 0)) {
 		printf("Failed to set pkcs11 engine MODULE_PATH to '%s'\n", options->p11module);
 		ENGINE_free(engine);
 		return 0; /* FAILED */
@@ -5017,14 +5017,17 @@ static int read_token(GLOBAL_OPTIONS *options, ENGINE *engine, CRYPTO_PARAMS *cp
 	}
 
 	cparams->pkey = ENGINE_load_private_key(engine, options->keyfile, NULL, NULL);
+
 	/* Free the functional reference from ENGINE_init */
-	ENGINE_finish(engine);
+	// ENGINE_finish(engine); -- JMM no otherwise everything, quite reasonably, segfaults when we try to use the engine
+
 	if (!cparams->pkey) {
 		printf("Failed to load private key %s\n", options->keyfile);
 		return 0; /* FAILED */
 	}
 	return 1; /* OK */
 }
+
 #endif /* OPENSSL_NO_ENGINE */
 
 static int read_crypto_params(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
@@ -5044,11 +5047,13 @@ static int read_crypto_params(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
 
 #ifndef OPENSSL_NO_ENGINE
 	/* PKCS11 engine and module support */
-	} else if (options->p11module) {
+	} else if ((options->p11engine) || (options->p11module)) {
 		ENGINE *engine;
 		if (options->p11engine)
 			engine = dynamic_engine(options);
-		else
+
+		// JMM - engine and module are orthogonal, not either or
+		if (options->p11module)
 			engine = pkcs11_engine(options);
 		if (!engine)
 			goto out; /* FAILED */
@@ -5057,7 +5062,6 @@ static int read_crypto_params(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
 		/* Load the private key and the signer certificate from the security token*/
 		if (!read_token(options, engine, cparams))
 			goto out; /* FAILED */
-
 		/* Load the signer certificate and the whole certificate chain from a file */
 		if (options->certfile && !read_certfile(options, cparams))
 			goto out; /* FAILED */
@@ -5564,7 +5568,7 @@ static int main_configure(int argc, char **argv, cmd_type_t *cmd, GLOBAL_OPTIONS
 		(*cmd != CMD_VERIFY && !options->outfile) ||
 		(*cmd == CMD_SIGN && !((options->certfile && options->keyfile) ||
 #ifndef OPENSSL_NO_ENGINE
-			options->p11module ||
+			options->p11engine || options->p11module ||
 #endif /* OPENSSL_NO_ENGINE */
 			options->pkcs12file))) {
 		if (failarg)
