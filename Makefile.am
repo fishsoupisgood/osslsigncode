@@ -8,6 +8,15 @@ MAINTAINERCLEANFILES = \
 	$(srcdir)/config.guess $(srcdir)/config.sub
 EXTRA_DIST = .gitignore
 
+
+libgsf/gsf/libgsf-1.la:
+	$(MAKE) -C libgsf
+
+GSF_CFLAGS=-DWITH_GSF=1 -I$(srcdir)/libgsf ${LIBGSF_DEPS_CFLAGS}
+GSF_LIBS=libgsf/gsf/libgsf-1.la ${LIBGSF_DEPS_LIBS}
+
+SUBDIRS = libgsf
+
 AM_CFLAGS = $(GSF_CFLAGS) $(OPENSSL_CFLAGS) $(OPTIONAL_LIBCURL_CFLAGS)
 
 bin_PROGRAMS = osslsigncode

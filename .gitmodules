@@ -1,0 +1,3 @@
+[submodule "libgsf"]
+	path = libgsf
+	url = https://github.com/fishsoupisgood/libgsf

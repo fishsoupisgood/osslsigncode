@@ -16,7 +16,11 @@ missing
 osslsigncode
 osslsigncode.o
 stamp-h1
-
+config.guess
+config.sub
+libtool
+ltmain.sh
+misery.o
 .#*#
 .*.bak
 .*.orig

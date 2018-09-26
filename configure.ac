@@ -3,6 +3,9 @@ AC_PREREQ(2.60)
 AC_INIT([osslsigncode], [2.1.0], [Michal.Trojnara@stunnel.org])
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_AUX_DIR([.])
+AC_USE_SYSTEM_EXTENSIONS
+LT_INIT
 AM_INIT_AUTOMAKE
 
 AC_CONFIG_SRCDIR([osslsigncode.c])
@@ -83,19 +86,27 @@ AC_CHECK_LIB(
 AC_CHECK_HEADERS([termios.h])
 AC_CHECK_FUNCS(getpass)
 
-AC_ARG_WITH([gsf],
-	AS_HELP_STRING([--without-gsf], [Ignore presence of libgsf and disable it])
-)
-AS_IF([test "x$with_gsf" != "xno"],
-	[PKG_CHECK_MODULES([GSF], [libgsf-1], [have_gsf=yes], [have_gsf=no])],
-	[have_gsf=no]
-)
-AS_IF([test "x$have_gsf" = "xyes"],
-	[AC_DEFINE([WITH_GSF], 1, [Have libgsf?])],
-	[AS_IF([test "x$with_gsf" = "xyes"],
-		[AC_MSG_ERROR([libgsf requested but not found])])]
-)
+dnl AC_ARG_WITH([gsf],
+dnl 	AS_HELP_STRING([--without-gsf], [Ignore presence of libgsf and disable it])
+dnl )
+dnl AS_IF([test "x$with_gsf" != "xno"],
+dnl 	[PKG_CHECK_MODULES([GSF], [libgsf-1], [have_gsf=yes], [have_gsf=no])],
+dnl 	[have_gsf=no]
+dnl )
+dnl AS_IF([test "x$have_gsf" = "xyes"],
+dnl 	[AC_DEFINE([WITH_GSF], 1, [Have libgsf?])],
+dnl 	[AS_IF([test "x$with_gsf" = "xyes"],
+dnl 		[AC_MSG_ERROR([libgsf requested but not found])])]
+dnl )
 
+libgsf_reqs="
+    gobject-2.0 >= 2.34.0
+    glib-2.0 >= 2.26.0
+    gio-2.0 >= 2.26.0
+    libxml-2.0 >= 2.4.16
+"
+
+PKG_CHECK_MODULES(LIBGSF_DEPS, $libgsf_reqs)
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
@@ -137,6 +148,7 @@ AC_SUBST([ICONV_LIBS])
 AC_DEFINE_UNQUOTED([CA_BUNDLE_PATH], ["$(curl-config --ca 2>/dev/null)"], [CA bundle install path])
 
 AC_CONFIG_FILES([Makefile])
+AC_CONFIG_SUBDIRS([libgsf])
 AC_OUTPUT
 
 # vim: set ts=4 noexpandtab:
