@@ -5117,7 +5117,7 @@ static char *get_cafile(void)
 	} else {
 		openssl_dir = OPENSSL_strdup("/etc");
 	}
-	cafile = OPENSSL_malloc(strlen(sslpart1) + strlen(sslpart2) + 1);
+	cafile = OPENSSL_malloc(strlen(openssl_dir) + strlen(sslpart2) + 1);
 	strcpy(cafile, openssl_dir);
 	strcat(cafile, sslpart2);
 
