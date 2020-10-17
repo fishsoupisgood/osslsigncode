@@ -124,6 +124,7 @@ typedef unsigned char u_char;
 #ifndef OPENSSL_NO_ENGINE
 #include <openssl/engine.h>
 #endif /* OPENSSL_NO_ENGINE */
+#include <openssl/safestack.h>
 
 #ifdef ENABLE_CURL
 #ifdef __CYGWIN__
@@ -209,8 +210,15 @@ typedef struct SIGNATURE_st {
 	ASN1_STRING *blob;
 } SIGNATURE;
 
+#if ( OPENSSL_VERSION_NUMBER < 0x10100000 )
+# define OPENSSL_10
+# include "ssl_1.0_compat.h"
+#endif
+
+
 DEFINE_STACK_OF(SIGNATURE)
 DECLARE_ASN1_FUNCTIONS(SIGNATURE)
+
 
 typedef struct {
 	char *infile;
@@ -1740,7 +1748,7 @@ static int asn1_print_time(const ASN1_TIME *time)
 {
 	BIO *bp;
 
-	if ((time == NULL) || (!ASN1_TIME_check(time))) {
+	if ((time == NULL) || (!ASN1_TIME_check((ASN1_TIME *) time))) {
 		printf("N/A\n");
 		return 0; /* FAILED */
 	}
@@ -5108,6 +5116,10 @@ static char *get_cafile(void)
 	if (strcmp(CA_BUNDLE_PATH, ""))
 		return OPENSSL_strdup(CA_BUNDLE_PATH);
 #endif
+#ifdef OPENSSL_10
+	openssl_dir = OPENSSL_strdup("/etc/pki/tls");
+	sslpart2 = "/certs/ca-bundle.crt";
+#else
 	sslpart1 = OpenSSL_version(OPENSSL_DIR);
 	sslpart2 = "/certs/ca-bundle.crt";
 	str_begin = strchr(sslpart1, '"');
@@ -5117,6 +5129,7 @@ static char *get_cafile(void)
 	} else {
 		openssl_dir = OPENSSL_strdup("/etc");
 	}
+#endif
 	cafile = OPENSSL_malloc(strlen(openssl_dir) + strlen(sslpart2) + 1);
 	strcpy(cafile, openssl_dir);
 	strcat(cafile, sslpart2);
@@ -5309,8 +5322,12 @@ static PKCS7 *cab_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *he
 
 static void print_version()
 {
-	printf(PACKAGE_STRING ", using:\n\t%s (Library: %s)\n\t%s\n",
-		OPENSSL_VERSION_TEXT, OpenSSL_version(OPENSSL_VERSION),
+	printf(PACKAGE_STRING ", using:\n\t%s" OPENSSL_VERSION_TEXT);
+
+#ifndef OPENSSL_10
+	printf(" (Library: %s)", OpenSSL_version(OPENSSL_VERSION));
+#endif
+	printf("\n\t%s\n",
 #ifdef ENABLE_CURL
 		curl_version()
 #else
@@ -5579,12 +5596,18 @@ int main(int argc, char **argv)
 	file_type_t type;
 	cmd_type_t cmd = CMD_SIGN;
 
+#ifdef OPENSSL_10
+	/* Set up OpenSSL */
+	ERR_load_crypto_strings();
+	OPENSSL_add_all_algorithms_conf();
+#else
 	/* Set up OpenSSL */
 	if (!OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS
 			| OPENSSL_INIT_ADD_ALL_CIPHERS
 			| OPENSSL_INIT_ADD_ALL_DIGESTS
 			| OPENSSL_INIT_LOAD_CONFIG, NULL))
 		DO_EXIT_0("Failed to init crypto\n");
+#endif
 
 	/* create some MS Authenticode OIDS we need later on */
 	if (!OBJ_create(SPC_STATEMENT_TYPE_OBJID, NULL, NULL) ||

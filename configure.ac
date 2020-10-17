@@ -93,19 +93,14 @@ AS_IF([test "x$have_gsf" = "xyes"],
 
 PKG_CHECK_MODULES(
 	[OPENSSL],
-	[libcrypto >= 1.1.1],
+	[libcrypto],
 	,
-	[PKG_CHECK_MODULES(
-		[OPENSSL],
-		[openssl >= 1.1.1],
-		,
-		[AC_CHECK_LIB(
-			[crypto],
-			[EVP_MD_CTX_new],
-			[OPENSSL_LIBS="-lcrypto ${SOCKETS_LIBS} ${DL_LIBS}"],
-			[AC_MSG_ERROR([OpenSSL 1.1.1 or later is required. https://www.openssl.org/])],
-			[${DL_LIBS}]
-		)]
+	[AC_CHECK_LIB(
+		[crypto],
+		[EVP_MD_CTX_create],
+		[OPENSSL_LIBS="-lcrypto ${SOCKETS_LIBS} ${DL_LIBS}"],
+		[AC_MSG_ERROR([OpenSSL is required. https://www.openssl.org/])],
+		[${DL_LIBS}]
 	)]
 )
 
