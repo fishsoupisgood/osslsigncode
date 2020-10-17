@@ -596,6 +596,10 @@ ASN1_SEQUENCE(TimeStampAccuracy) = {
 
 IMPLEMENT_ASN1_FUNCTIONS(TimeStampAccuracy)
 
+extern int pkcs7_cert_order_check (PKCS7 *, FILE *);
+extern int pkcs7_cert_order_show (PKCS7 *, FILE *);
+extern void pkcs7_cert_order_fix (PKCS7 *);
+
 
 typedef struct {
 	ASN1_INTEGER *version;
@@ -2610,6 +2614,9 @@ static int verify_authenticode(SIGNATURE *signature, GLOBAL_OPTIONS *options, X5
 		goto out;
 	}
 
+	if (!pkcs7_cert_order_check (signature->p7, stdout))
+		verok = 0;
+
 	verok = 1; /* OK */
 out:
 	if (!verok)
@@ -4440,6 +4447,11 @@ static PKCS7 *create_new_signature(file_type_t type,
 		for (i=0; i<sk_X509_CRL_num(cparams->crls); i++)
 			PKCS7_add_crl(sig, sk_X509_CRL_value(cparams->crls, i));
 	}
+
+	pkcs7_cert_order_fix (sig);
+
+	pkcs7_cert_order_show(sig, stdout);
+
 	return sig; /* OK */
 }
 

@@ -21,5 +21,5 @@ AM_CFLAGS = $(GSF_CFLAGS) $(OPENSSL_CFLAGS) $(OPTIONAL_LIBCURL_CFLAGS)
 
 bin_PROGRAMS = osslsigncode
 
-osslsigncode_SOURCES = osslsigncode.c
+osslsigncode_SOURCES = osslsigncode.c pkcs7_cert_order.c
 osslsigncode_LDADD = $(GSF_LIBS) $(OPENSSL_LIBS) $(OPTIONAL_LIBCURL_LIBS) $(ICONV_LIBS)
