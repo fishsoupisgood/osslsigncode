@@ -6088,6 +6088,11 @@ static void print_version()
 		"\tno libgsf available\n"
 #endif /* WITH_GSF */
 		);
+	printf("\tsupported file types: cab pe cat txt"
+#ifdef WITH_GSF
+		" msi"
+#endif
+		"\n");
 	printf("\nPlease send bug-reports to " PACKAGE_BUGREPORT "\n\n");
 }
 
