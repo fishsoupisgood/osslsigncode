@@ -299,6 +299,8 @@ typedef struct {
 	GsfOutput *sink;
 	u_char *p_msiex;
 	int len_msiex;
+	guint16 bb_shift;
+	guint16 sb_shift;
 } GSF_PARAMS;
 #endif /* WITH_GSF */
 
@@ -2786,6 +2788,22 @@ static gboolean msi_prehash_utf16_name(gchar *name, BIO *hash)
 	return TRUE;
 }
 
+static guint64
+datetime_to_filetime (GDateTime *dt)
+{
+	static const guint64 epoch = G_GINT64_CONSTANT (11644473600);
+	guint64 sec, usec;
+
+	if (!dt)
+		return 0u;
+
+	/* ft is number of 100ns since Jan 1 1601 */
+	sec = g_date_time_to_unix(dt);
+	usec = g_date_time_get_microsecond(dt);
+
+	return (sec + epoch) * 10000000u + usec * 10u;
+}
+
 /*
  * msi_prehash calculates the pre-hash used for 'MsiDigitalSignatureEx'
  * signatures in MSI files.  The pre-hash hashes only metadata (file names,
@@ -2798,6 +2816,7 @@ static gboolean msi_prehash(GsfInfile *infile, gchar *dirname, BIO *hash)
 {
 	GSList *sorted, *current;
 	guint8 classid[16], zeroes[8];
+	guint64 creatime, modtime;
 	gboolean is_dir;
 	gsf_off_t size;
 	guint32 sizebuf;
@@ -2813,13 +2832,11 @@ static gboolean msi_prehash(GsfInfile *infile, gchar *dirname, BIO *hash)
 	BIO_write(hash, classid, sizeof(classid));
 	BIO_write(hash, zeroes, 4);
 	if (dirname != NULL) {
-		/*
-		 * Creation time and modification time for the root directory.
-		 * These are always zero. The ctime and mtime of the actual
-		 * file itself takes precedence.
-		 */
-		BIO_write(hash, zeroes, 8); /* ctime as Windows FILETIME */
-		BIO_write(hash, zeroes, 8); /* mtime as Windows FILETIME */
+		creatime=datetime_to_filetime(gsf_input_get_creatime(GSF_INPUT(infile)));
+		modtime=datetime_to_filetime(gsf_input_get_modtime(GSF_INPUT(infile)));
+
+		BIO_write(hash, &creatime, 8);
+		BIO_write(hash, &modtime, 8);
 	}
 	sorted = msi_sorted_infile_children(infile);
 	for (current = sorted; current; current = g_slist_next(current)) {
@@ -2855,8 +2872,11 @@ static gboolean msi_prehash(GsfInfile *infile, gchar *dirname, BIO *hash)
 			 * zeroed, because libgsf doesn't seem
 			 * to support outputting them.
 			 */
-			BIO_write(hash, zeroes, 8); /* ctime as Windows FILETIME */
-			BIO_write(hash, zeroes, 8); /* mtime as Windows FILETIME */
+			creatime=datetime_to_filetime(gsf_input_get_creatime(GSF_INPUT(infile)));
+			modtime=datetime_to_filetime(gsf_input_get_modtime(GSF_INPUT(infile)));
+
+			BIO_write(hash, &creatime, 8);
+			BIO_write(hash, &modtime, 8);
 		}
 		g_object_unref(child);
 	}
@@ -2896,8 +2916,12 @@ static gboolean msi_handle_dir(GsfInfile *infile, GsfOutfile *outole, BIO *hash)
 		if (child == NULL)
 			continue;
 		is_dir = GSF_IS_INFILE(child) && gsf_infile_num_children(GSF_INFILE(child)) > 0;
-		if (outole != NULL)
+		if (outole != NULL) {
 			outchild = gsf_outfile_new_child(outole, name, is_dir);
+
+			gsf_output_set_modtime(outchild, gsf_input_get_modtime(child));
+			gsf_output_set_creatime(outchild, gsf_input_get_creatime(child));
+		}
 		if (is_dir) {
 			if (!msi_handle_dir(GSF_INFILE(child), GSF_OUTFILE(outchild), hash)) {
 				gsf_output_close(outchild);
@@ -5453,7 +5477,10 @@ static PKCS7 *msi_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *he
 		printf("Failed to create file: %s\n", options->outfile);
 		return NULL; /* FAILED */
 	}
-	gsfparams->outole = gsf_outfile_msole_new(gsfparams->sink);
+	gsfparams->outole = gsf_outfile_msole_new_full(gsfparams->sink, 1 << gsfparams->bb_shift, 1 << gsfparams->sb_shift);
+
+	gsf_output_set_modtime(GSF_OUTPUT(gsfparams->outole), gsf_input_get_modtime(GSF_INPUT(ole)));
+	gsf_output_set_creatime(GSF_OUTPUT(gsfparams->outole), gsf_input_get_creatime(GSF_INPUT(ole)));
 
 	BIO_push(hash, BIO_new(BIO_s_null()));
 	if (options->add_msi_dse && !msi_calc_MsiDigitalSignatureEx(ole, options->md, hash, gsfparams))
@@ -5462,6 +5489,7 @@ static PKCS7 *msi_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *he
 		printf("Unable to msi_handle_dir()\n");
 		return NULL; /* FAILED */
 	}
+
 
 	/* Obtain a current signature from previously-signed file */
 	if ((cmd == CMD_SIGN && options->nest) ||
@@ -6378,6 +6406,14 @@ int main(int argc, char **argv)
 		src = gsf_input_stdio_new(options.infile, NULL);
 		if (!src)
 			DO_EXIT_1("Error opening file %s\n", options.infile);
+
+		/* JMM - FIXME we should get these from the ole handle rather than parsing them out of the stream */
+
+		gsf_input_seek (src, 0x1e, G_SEEK_SET);
+		gsf_input_read (src, 0x02, (guint8 *) &gsfparams.bb_shift);
+		gsf_input_read (src, 0x02, (guint8 *) &gsfparams.sb_shift);
+		gsf_input_seek (src, 0x00, G_SEEK_SET);
+
 		ole = gsf_infile_msole_new(src, NULL);
 		g_object_unref(src);
 
