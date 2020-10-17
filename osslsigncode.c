@@ -151,10 +151,14 @@ typedef unsigned char u_char;
 #define PROVIDE_ASKPASS 1
 #endif
 
-#ifdef _WIN32
-#define FILE_CREATE_MODE "w+b"
+#ifdef NOCLOBBER
+# ifdef _WIN32
+#  define FILE_CREATE_MODE "w+b"
+# else
+#  define FILE_CREATE_MODE "w+bx"
+# endif
 #else
-#define FILE_CREATE_MODE "w+bx"
+# define FILE_CREATE_MODE "w+b"
 #endif
 
 /* MS Authenticode object ids */
@@ -3106,7 +3110,7 @@ static int msi_extract_signature_to_file(GsfInfile *infile, GLOBAL_OPTIONS *opti
 		return 1; /* FAILED */
 	}
 	/* Create outdata DER file */
-#ifdef WIN32
+#if defined(WIN32) && defined(NOCLOBBER)
 	if (!access(options->outfile, R_OK)) {
 		/* outdata file exists */
 		printf("Failed to create file: %s\n", options->outfile);
@@ -3193,7 +3197,7 @@ static int msi_extract_file(GsfInfile *ole, GLOBAL_OPTIONS *options)
 			return 1; /* FAILED */
 		}
 		/* Create outdata PEM file */
-#ifdef WIN32
+#if defined(WIN32) && defined(NOCLOBBER)
 		if (!access(options->outfile, R_OK)) {
 			/* outdata file exists */
 			printf("Failed to create file: %s\n", options->outfile);
@@ -5226,12 +5230,14 @@ static PKCS7 *msi_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *he
 {
 	PKCS7 *sig = NULL;
 
+#ifdef NOCLOBBER
 	/* Create outdata MSI file */
 	if (!access(options->outfile, R_OK)) {
 		/* outdata file exists */
 		printf("Failed to create file: %s\n", options->outfile);
 		return NULL; /* FAILED */
 	}
+#endif
 	gsfparams->sink = gsf_output_stdio_new(options->outfile, NULL);
 	if (!gsfparams->sink) {
 		printf("Failed to create file: %s\n", options->outfile);
@@ -5704,7 +5710,7 @@ int main(int argc, char **argv)
 
 	if ((type == FILE_TYPE_CAB || type == FILE_TYPE_PE) && (cmd != CMD_VERIFY)) {
 		/* Create outdata file */
-#ifdef WIN32
+#if defined(WIN32) && defined(NOCLOBBER)
 		if (!access(options.outfile, R_OK))
 			/* outdata file exists */
 			DO_EXIT_1("Failed to create file: %s\n", options.outfile);
